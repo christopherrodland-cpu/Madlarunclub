@@ -886,47 +886,81 @@ document.addEventListener('DOMContentLoaded', function(){
   setInterval(fixMrcLogos, 1000);
 })();
 </script>
-
-</body>
-</html>
-<div id="membersList"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
 const supabaseUrl = 'https://xehmoqnvwiywrmpwehng.supabase.co';
 const supabaseKey = 'sb_publishable_kZcV1DOqhZopCmhkLcfkEA_9QtPUOMO';
+const db = supabase.createClient(supabaseUrl, supabaseKey);
 
-const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+async function submitMember() {
+  const name = document.getElementById('m-name')?.value?.trim();
+  const phone = document.getElementById('m-phone')?.value?.trim();
+  const email = document.getElementById('m-email')?.value?.trim();
+  const instagram = document.getElementById('m-social')?.value?.trim();
+  const note = document.getElementById('m-note')?.value?.trim();
 
-// REGISTRER MEDLEM
-async function registerMember(name, instagram, pace) {
-
-  const { error } = await supabaseClient
-    .from('members')
-    .insert([
-      {
-        name,
-        instagram,
-        pace,
-        status: 'pending'
-      }
-    ]);
-
-  if (error) {
-    console.error(error);
-    alert('Feil ved registrering');
+  if (!name || !phone) {
+    alert('Fyll inn navn og telefon.');
     return;
   }
 
-  alert('Registrering sendt!');
+  const { error } = await db.from('members').insert({
+    name,
+    phone,
+    email,
+    instagram,
+    note,
+    status: 'pending'
+  });
+
+  if (error) {
+    console.error(error);
+    alert('Noe gikk feil.');
+    return;
+  }
+
+  alert('Registrering sendt til admin!');
+  closeOv('member-ov');
   loadMembers();
+  loadAdminMembers();
 }
 
-// LAST MEDLEMMER
 async function loadMembers() {
+  const { data, error } = await db
+    .from('members')
+    .select('*')
+    .eq('status', 'approved')
+    .order('created_at', { ascending: false });
 
-  const { data, error } = await supabaseClient
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const grid = document.getElementById('member-grid');
+  if (!grid) return;
+
+  if (!data.length) {
+    grid.innerHTML = '<div class="empty"><p>Ingen godkjente medlemmer ennå</p></div>';
+    return;
+  }
+
+  grid.innerHTML = data.map(m => `
+    <div class="scard">
+      <div class="sc-str"></div>
+      <div class="sc-by">MRC medlem</div>
+      <div class="sc-nm">${m.name}</div>
+      <div class="sc-meta">
+        ${m.instagram ? `<span class="sc-chip hi">${m.instagram}</span>` : ''}
+      </div>
+      <div class="sc-date">${m.note || 'Madla Run Club'}</div>
+    </div>
+  `).join('');
+}
+
+async function loadAdminMembers() {
+  const { data, error } = await db
     .from('members')
     .select('*')
     .order('created_at', { ascending: false });
@@ -936,31 +970,62 @@ async function loadMembers() {
     return;
   }
 
-  const container = document.getElementById('membersList');
+  const pendingBox = document.getElementById('a-member-pending-list');
+  const approvedBox = document.getElementById('a-member-list');
 
-  if (!container) return;
+  if (pendingBox) {
+    const pending = data.filter(m => m.status === 'pending');
 
-  container.innerHTML = '';
+    pendingBox.innerHTML = pending.length ? pending.map(m => `
+      <div class="adm-item">
+        <div class="adm-info">
+          <div class="adm-nm">${m.name}</div>
+          <div class="adm-dt">${m.phone || ''} · ${m.email || ''} · ${m.instagram || ''} · ${m.note || ''}</div>
+        </div>
+        <div class="adm-btns">
+          <button class="a-ok" onclick="approveMember(${m.id})">Godkjenn</button>
+          <button class="a-no" onclick="rejectMember(${m.id})">Avvis</button>
+        </div>
+      </div>
+    `).join('') : '<div class="adm-none">Ingen registreringer venter godkjenning</div>';
+  }
 
-  data.forEach(member => {
+  if (approvedBox) {
+    const approved = data.filter(m => m.status === 'approved');
 
-    const div = document.createElement('div');
-
-    div.style.padding = '12px';
-    div.style.borderBottom = '1px solid #ccc';
-
-    div.innerHTML = `
-      <strong>${member.name}</strong><br>
-      Instagram: ${member.instagram || '-'}<br>
-      Pace: ${member.pace || '-'}<br>
-      Status: ${member.status}
-    `;
-
-    container.appendChild(div);
-
-  });
-
+    approvedBox.innerHTML = approved.length ? approved.map(m => `
+      <div class="adm-item">
+        <div class="adm-info">
+          <div class="adm-nm">${m.name}</div>
+          <div class="adm-dt">${m.phone || ''} · ${m.email || ''} · ${m.instagram || ''}</div>
+        </div>
+      </div>
+    `).join('') : '<div class="adm-none">Ingen godkjente medlemmer ennå</div>';
+  }
 }
 
-loadMembers();
+async function approveMember(id) {
+  await db.from('members').update({ status: 'approved' }).eq('id', id);
+  loadMembers();
+  loadAdminMembers();
+}
+
+async function rejectMember(id) {
+  await db.from('members').delete().eq('id', id);
+  loadMembers();
+  loadAdminMembers();
+}
+
+const oldCheckAdm = window.checkAdm;
+window.checkAdm = function () {
+  if (typeof oldCheckAdm === 'function') oldCheckAdm();
+  setTimeout(loadAdminMembers, 300);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadMembers();
+  loadAdminMembers();
+});
 </script>
+</body>
+</html>
