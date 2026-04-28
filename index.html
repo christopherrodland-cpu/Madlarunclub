@@ -1027,5 +1027,277 @@ document.addEventListener('DOMContentLoaded', () => {
   loadAdminMembers();
 });
 </script>
+ <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+window.mrcDb = window.mrcDb || supabase.createClient(
+  "https://xehmoqnvwiywrmpwehng.supabase.co",
+  "sb_publishable_kZcV1DOqhZopCmhkLcfkEA_9QtPUOMO"
+);
+
+/* ---------- NESTE PÅ PLANEN ---------- */
+
+async function renderRuns() {
+  const { data, error } = await window.mrcDb
+    .from("runs")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const grid = document.getElementById("runs-grid");
+  if (!grid) return;
+
+  if (error) {
+    console.error(error);
+    grid.innerHTML = '<div class="empty"><p>Kunne ikke laste løp.</p></div>';
+    return;
+  }
+
+  if (!data || !data.length) {
+    grid.innerHTML = '<div class="empty"><p>Ingen løp planlagt ennå.</p></div>';
+    return;
+  }
+
+  grid.innerHTML = data.map((r, i) => `
+    <div class="rc">
+      <div class="rc-str"></div>
+      <div class="rc-num">0${i + 1}</div>
+      <div class="rc-dt">${r.date || ""}</div>
+      <div class="rc-nm">${r.name || ""}</div>
+      <div class="rc-info">${r.description || ""}</div>
+      <div class="rc-pill">${r.km || ""}</div>
+    </div>
+  `).join("");
+}
+
+async function addRun() {
+  const name = document.getElementById("a-rn")?.value?.trim();
+  const date = document.getElementById("a-rd")?.value?.trim();
+  const km = document.getElementById("a-rk")?.value?.trim();
+  const description = document.getElementById("a-ri")?.value?.trim();
+
+  if (!name) {
+    alert("Skriv inn navn på løp.");
+    return;
+  }
+
+  const { error } = await window.mrcDb.from("runs").insert([
+    { name, date, km, description }
+  ]);
+
+  if (error) {
+    alert("Feil: " + error.message);
+    console.error(error);
+    return;
+  }
+
+  ["a-rn", "a-rd", "a-rk", "a-ri"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+
+  await renderRuns();
+  await renderAdmRuns();
+}
+
+async function renderAdmRuns() {
+  const { data, error } = await window.mrcDb
+    .from("runs")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const list = document.getElementById("a-runs-list");
+  if (!list) return;
+
+  if (error) {
+    list.innerHTML = '<div class="adm-none">Kunne ikke laste løp</div>';
+    return;
+  }
+
+  if (!data || !data.length) {
+    list.innerHTML = '<div class="adm-none">Ingen løp</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(r => `
+    <div class="adm-item">
+      <div class="adm-info">
+        <div class="adm-nm">${r.name || ""}</div>
+        <div class="adm-dt">${r.date || ""} · ${r.km || ""}</div>
+      </div>
+      <div class="adm-btns">
+        <button class="a-no" onclick="delRun(${r.id})">Slett</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function delRun(id) {
+  const { error } = await window.mrcDb
+    .from("runs")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert("Feil: " + error.message);
+    return;
+  }
+
+  await renderRuns();
+  await renderAdmRuns();
+}
+
+/* ---------- UKENS ØKTER ---------- */
+
+async function submitSession() {
+  const name = document.getElementById("s-name")?.value?.trim();
+  const creator = document.getElementById("s-creator")?.value?.trim();
+  const date = document.getElementById("s-date")?.value;
+  const time = document.getElementById("s-time")?.value;
+  const km = document.getElementById("s-km")?.value?.trim();
+  const tempo = document.getElementById("s-tempo")?.value?.trim();
+
+  if (!name || !creator) {
+    alert("Fyll inn navn på økt og ditt navn.");
+    return;
+  }
+
+  const { error } = await window.mrcDb.from("sessions").insert([
+    {
+      name,
+      creator,
+      date,
+      time,
+      km,
+      tempo,
+      status: "pending"
+    }
+  ]);
+
+  if (error) {
+    alert("Feil: " + error.message);
+    console.error(error);
+    return;
+  }
+
+  alert("Økt sendt til admin!");
+
+  ["s-name", "s-creator", "s-date", "s-time", "s-km", "s-tempo"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = "";
+  });
+
+  closeOv("sess-ov");
+  await renderAdmPend();
+}
+
+async function renderSess() {
+  const { data, error } = await window.mrcDb
+    .from("sessions")
+    .select("*")
+    .eq("status", "approved")
+    .order("created_at", { ascending: false });
+
+  const grid = document.getElementById("sess-grid");
+  if (!grid) return;
+
+  if (error) {
+    console.error(error);
+    grid.innerHTML = '<div class="empty"><p>Kunne ikke laste økter.</p></div>';
+    return;
+  }
+
+  if (!data || !data.length) {
+    grid.innerHTML = '<div class="empty"><p>Ingen aktive økter — legg inn din!</p></div>';
+    return;
+  }
+
+  grid.innerHTML = data.map(s => `
+    <div class="scard">
+      <div class="sc-str"></div>
+      <div class="sc-by">Lagt inn av ${s.creator || ""}</div>
+      <div class="sc-nm">${s.name || ""}</div>
+      <div class="sc-meta">
+        ${s.km ? `<span class="sc-chip hi">${s.km} km</span>` : ""}
+        ${s.tempo ? `<span class="sc-chip hi">${s.tempo} min/km</span>` : ""}
+        ${s.time ? `<span class="sc-chip">${s.time}</span>` : ""}
+      </div>
+      <div class="sc-date">${s.date || ""}</div>
+    </div>
+  `).join("");
+}
+
+async function renderAdmPend() {
+  const { data, error } = await window.mrcDb
+    .from("sessions")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  const list = document.getElementById("a-sess-list");
+  if (!list) return;
+
+  if (error) {
+    list.innerHTML = '<div class="adm-none">Kunne ikke laste økter</div>';
+    return;
+  }
+
+  if (!data || !data.length) {
+    list.innerHTML = '<div class="adm-none">Ingen økter venter godkjenning</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(s => `
+    <div class="adm-item">
+      <div class="adm-info">
+        <div class="adm-nm">${s.name || ""}</div>
+        <div class="adm-dt">
+          ${s.creator || ""} · ${s.date || ""} · ${s.time || ""} · ${s.km || ""} km · ${s.tempo || ""} min/km
+        </div>
+      </div>
+      <div class="adm-btns">
+        <button class="a-ok" onclick="appSess(${s.id})">Godkjenn</button>
+        <button class="a-no" onclick="rejSess(${s.id})">Avvis</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function appSess(id) {
+  const { error } = await window.mrcDb
+    .from("sessions")
+    .update({ status: "approved" })
+    .eq("id", id);
+
+  if (error) {
+    alert("Feil: " + error.message);
+    return;
+  }
+
+  await renderSess();
+  await renderAdmPend();
+}
+
+async function rejSess(id) {
+  const { error } = await window.mrcDb
+    .from("sessions")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert("Feil: " + error.message);
+    return;
+  }
+
+  await renderSess();
+  await renderAdmPend();
+}
+
+/* ---------- KJØR VED LASTING ---------- */
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderRuns();
+  renderSess();
+});
+</script>
 </body>
 </html>
