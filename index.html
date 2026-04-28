@@ -1637,5 +1637,71 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSess();
 });
 </script>
+<script>
+/* ADMIN: SLETT BILDER FRA FELTGALLERIET */
+
+async function renderAdmGal() {
+  const { data, error } = await db
+    .from("gallery")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const list = document.getElementById("a-gal-list");
+  if (!list) return;
+
+  if (error) {
+    list.innerHTML = '<div class="adm-none">Kunne ikke laste bilder.</div>';
+    return;
+  }
+
+  if (!data || !data.length) {
+    list.innerHTML = '<div class="adm-none">Ingen bilder</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(img => `
+    <div class="adm-item">
+      <img class="adm-thumb" src="${img.image}" alt="">
+      <div class="adm-info">
+        <div class="adm-nm">${img.name || "Ukjent"}</div>
+        <div class="adm-dt">${img.date || ""}</div>
+      </div>
+      <div class="adm-btns">
+        <button class="a-no" onclick="deleteGalleryImage(${img.id})">Slett</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function deleteGalleryImage(id) {
+  const ok = confirm("Slette dette bildet fra feltgalleriet?");
+  if (!ok) return;
+
+  const { error } = await db
+    .from("gallery")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    alert("Feil: " + error.message);
+    return;
+  }
+
+  alert("Bildet er slettet.");
+  loadGallery();
+  renderAdmGal();
+}
+
+const oldCheckAdmGallery = window.checkAdm;
+
+window.checkAdm = function () {
+  if (typeof oldCheckAdmGallery === "function") oldCheckAdmGallery();
+  setTimeout(renderAdmGal, 300);
+};
+
+document.addEventListener("DOMContentLoaded", () => {
+  renderAdmGal();
+});
+</script>
 </body>
 </html>
