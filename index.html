@@ -889,3 +889,78 @@ document.addEventListener('DOMContentLoaded', function(){
 
 </body>
 </html>
+<div id="membersList"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+const supabaseUrl = 'https://xehmoqnvwiywrmpwehng.supabase.co';
+const supabaseKey = 'sb_publishable_kZcV1DOqhZopCmhkLcfkEA_9QtPUOMO';
+
+const supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
+
+// REGISTRER MEDLEM
+async function registerMember(name, instagram, pace) {
+
+  const { error } = await supabaseClient
+    .from('members')
+    .insert([
+      {
+        name,
+        instagram,
+        pace,
+        status: 'pending'
+      }
+    ]);
+
+  if (error) {
+    console.error(error);
+    alert('Feil ved registrering');
+    return;
+  }
+
+  alert('Registrering sendt!');
+  loadMembers();
+}
+
+// LAST MEDLEMMER
+async function loadMembers() {
+
+  const { data, error } = await supabaseClient
+    .from('members')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  const container = document.getElementById('membersList');
+
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  data.forEach(member => {
+
+    const div = document.createElement('div');
+
+    div.style.padding = '12px';
+    div.style.borderBottom = '1px solid #ccc';
+
+    div.innerHTML = `
+      <strong>${member.name}</strong><br>
+      Instagram: ${member.instagram || '-'}<br>
+      Pace: ${member.pace || '-'}<br>
+      Status: ${member.status}
+    `;
+
+    container.appendChild(div);
+
+  });
+
+}
+
+loadMembers();
+</script>
