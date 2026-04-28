@@ -1299,5 +1299,119 @@ document.addEventListener("DOMContentLoaded", () => {
   renderSess();
 });
 </script>
+ <script>
+/* ---------- FELTGALLERI OFFENTLIG ---------- */
+
+async function submitGallery() {
+  const name = document.getElementById('g-name')?.value?.trim();
+  const date = document.getElementById('g-date')?.value;
+  const file = document.getElementById('g-file')?.files?.[0];
+
+  if (!name || !date || !file) {
+    alert('Fyll inn navn, dato og bilde.');
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = async function(e) {
+    const image = e.target.result;
+
+    const { error } = await db.from('gallery').insert([
+      { name, date, image }
+    ]);
+
+    if (error) {
+      alert('Feil: ' + error.message);
+      return;
+    }
+
+    alert('Bilde lastet opp!');
+    closeOv('gal-ov');
+    loadGallery();
+  };
+
+  reader.readAsDataURL(file);
+}
+
+async function loadGallery() {
+  const { data, error } = await db
+    .from('gallery')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  const grid = document.getElementById('gal-grid');
+  if (!grid) return;
+
+  if (error) {
+    grid.innerHTML = '<div class="empty"><p>Kunne ikke laste bilder.</p></div>';
+    return;
+  }
+
+  if (!data.length) {
+    grid.innerHTML = '<div class="empty"><p>Ingen bilder ennå — vær den første!</p></div>';
+    return;
+  }
+
+  grid.innerHTML = data.map(img => `
+    <div class="gi">
+      <img src="${img.image}" alt="${img.name || ''}">
+      <div class="gi-info">
+        <div class="gi-nm">${img.name || ''}</div>
+        <div class="gi-dt">${img.date || ''}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ---------- KONTAKT MRC OFFENTLIG ---------- */
+
+async function loadContact() {
+  const { data, error } = await db
+    .from('contact_info')
+    .select('*')
+    .eq('id', 1)
+    .single();
+
+  if (error) return;
+
+  document.getElementById('c-name').textContent = data.leader || '—';
+  document.getElementById('c-email').textContent = data.email || 'Sett i admin';
+  document.getElementById('c-ig').textContent = 'Instagram: ' + (data.instagram || '—');
+  document.getElementById('c-strava').textContent = 'Strava: ' + (data.strava || '—');
+}
+
+async function saveContact() {
+  const leader = document.getElementById('a-cn')?.value?.trim();
+  const email = document.getElementById('a-ce')?.value?.trim();
+  const instagram = document.getElementById('a-ci')?.value?.trim();
+  const strava = document.getElementById('a-cs')?.value?.trim();
+
+  const { error } = await db
+    .from('contact_info')
+    .upsert({
+      id: 1,
+      leader,
+      email,
+      instagram,
+      strava
+    });
+
+  if (error) {
+    alert('Feil: ' + error.message);
+    return;
+  }
+
+  alert('Kontaktinfo lagret!');
+  loadContact();
+}
+
+/* ---------- KJØR ---------- */
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadGallery();
+  loadContact();
+});
+</script>
 </body>
 </html>
